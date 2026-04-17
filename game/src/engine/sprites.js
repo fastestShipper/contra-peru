@@ -1,460 +1,158 @@
-// Procedural pixel sprites
+// Image-based sprite system (loads AI-generated pixel art)
 const CACHE = new Map();
 
-function bake(key, rows, palette, opts = {}) {
-  if (CACHE.has(key)) return CACHE.get(key);
-  const w = rows[0].length, h = rows.length;
-  const scale = opts.scale || 1;
-  const cvs = document.createElement('canvas');
-  cvs.width = w * scale; cvs.height = h * scale;
-  const ctx = cvs.getContext('2d'); ctx.imageSmoothingEnabled = false;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const k = rows[y][x];
-      if (k === '.' || k === ' ' || !k) continue;
-      const c = palette[k]; if (!c) continue;
-      ctx.fillStyle = c;
-      ctx.fillRect(x*scale, y*scale, scale, scale);
-    }
+// list of (key, path) pairs to preload
+const MANIFEST = [
+  ['greg-idle',        'assets/processed/greg-idle.png'],
+  ['greg-run-0',       'assets/processed/greg-run-0.png'],
+  ['greg-run-1',       'assets/processed/greg-run-1.png'],
+  ['greg-shoot',       'assets/processed/greg-shoot.png'],
+  ['greg-jump',        'assets/processed/greg-jump.png'],
+  ['greg-crouch',      'assets/processed/greg-crouch.png'],
+
+  ['enemy-congresista', 'assets/processed/enemy-congresista.png'],
+  ['enemy-ciudadano',   'assets/processed/enemy-ciudadano.png'],
+  ['enemy-turret',      'assets/processed/enemy-turret.png'],
+  ['enemy-roller',      'assets/processed/enemy-roller.png'],
+
+  ['boss-combi',        'assets/processed/boss-combi.png'],
+
+  ['bg-lima',           'assets/processed/bg-lima.png'],
+  ['bg-plaza',          'assets/processed/bg-plaza.png'],
+  ['bg-congreso',       'assets/processed/bg-congreso.png'],
+];
+
+function loadImage(path) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      console.warn('[sprites] failed:', path);
+      resolve(null);
+    };
+    img.src = path;
+  });
+}
+
+export async function loadAllSprites() {
+  await Promise.all(MANIFEST.map(async ([key, path]) => {
+    const img = await loadImage(path);
+    if (img) CACHE.set(key, { img, w: img.naturalWidth, h: img.naturalHeight });
+  }));
+  // build placeholder flyer sprite since AI didn't produce one reliably
+  buildFlyerSprite();
+  buildPowerupSprites();
+  buildFxSprites();
+  return CACHE;
+}
+
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
+function buildFlyerSprite() {
+  const w = 20, h = 12;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  // Orange drone body
+  ctx.fillStyle = '#080402'; ctx.fillRect(3, 4, w - 6, 5);       // outline body
+  ctx.fillStyle = '#ff7a1f'; ctx.fillRect(4, 5, w - 8, 3);       // body fill
+  ctx.fillStyle = '#ffd040'; ctx.fillRect(4, 5, w - 8, 1);       // highlight
+  // eye (red sensor)
+  ctx.fillStyle = '#ff3a14'; ctx.fillRect(w - 5, 6, 2, 2);
+  // rotor blur top
+  ctx.fillStyle = 'rgba(200,200,200,0.6)';
+  ctx.fillRect(1, 1, w - 2, 1);
+  ctx.fillRect(1, 2, w - 2, 1);
+  // arms
+  ctx.fillStyle = '#2a2a2a';
+  ctx.fillRect(2, 3, 2, 1);
+  ctx.fillRect(w - 4, 3, 2, 1);
+  // under-gun
+  ctx.fillRect(w/2 - 1, 9, 2, 2);
+  CACHE.set('enemy-flyer', { img: c, w, h });
+}
+
+function buildPowerupSprites() {
+  const colors = {
+    M: '#3a3a4a', S: '#ff7a1f', F: '#ff3a14', H: '#7a3aff', L: '#ff3aff', B: '#ffd040',
+  };
+  for (const k in colors) {
+    const c = makeCanvas(12, 12);
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    // outline box
+    ctx.fillStyle = '#080402'; ctx.fillRect(0, 0, 12, 12);
+    // inner
+    ctx.fillStyle = colors[k]; ctx.fillRect(1, 1, 10, 10);
+    // highlight
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(1, 1, 10, 1); ctx.fillRect(1, 1, 1, 10);
+    // shadow
+    ctx.fillStyle = '#000000'; ctx.fillRect(1, 10, 10, 1); ctx.fillRect(10, 1, 1, 10);
+    // letter
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 8px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(k, 6, 7);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    CACHE.set('powerup_' + k, { img: c, w: 12, h: 12 });
   }
-  const out = { canvas: cvs, w: cvs.width, h: cvs.height, pw: w, ph: h };
-  CACHE.set(key, out);
-  return out;
-}
-const r = str => str.split('');
-
-// =========================================================
-// GREGORIO — Alianza Lima cap, leather jacket, white shirt
-// =========================================================
-const GP = {
-  O: '#080402',  // outline
-  S: '#c0895a',  // skin
-  s: '#8a5a34',  // skin shadow
-  H: '#1a1014',  // hair/beard
-  W: '#e8e0d0',  // white shirt
-  w: '#a89888',  // shirt shadow
-  R: '#c01a1a',  // blood
-  L: '#14141c',  // leather jacket black
-  l: '#3a3a4a',  // leather hi
-  J: '#1a2a48',  // jean
-  j: '#0a152a',  // jean shadow
-  Z: '#e0e0e0',  // shoe white
-  z: '#2a2a2a',  // shoe shadow
-  B: '#002f6c',  // alianza blue
-  b: '#00152e',  // alianza blue dark
-  c: '#ffffff',  // alianza white stripe
-  E: '#1a1a1a',  // eye
-  g: '#2a1a0a',  // gun body
-  G: '#5a4a3a',  // gun hi
-};
-
-// idle stand right (14w x 26h)
-const gregIdle = [
-  '...BBBBBBB....',
-  '..BBBccBBB....',  // cap with white stripe
-  '.BcBBBBBBb....',
-  '.BBBBBBBbB....',
-  '.OsSSSsOH.....',  // face
-  '.OEssEsO.Hb...',  // eye + side
-  '.OHHHHHO......',  // beard
-  '..LLLLLL.g....',  // jacket collar
-  '.LLWWWWLL.GGgg',  // gun out
-  '.LWWRRWWL..gGg',
-  '.LWWRRWWL...g.',
-  '.LLWWWWLL.....',
-  '.LLLWWLLL.....',
-  '..LjJJjL......',
-  '..JJJJJJ......',
-  '..JJJJJJ......',
-  '..JJjjJJ......',
-  '..Jj..jJ......',
-  '..j....j......',
-  '..Zz..zZ......',
-  '.ZZZ..ZZZ.....',
-  '.OO....OO.....',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-];
-
-// run right frame 0
-const gregRun0 = [
-  '...BBBBBBB....',
-  '..BBBccBBB....',
-  '.BcBBBBBBb....',
-  '.BBBBBBBbB....',
-  '.OsSSSsOH.....',
-  '.OEssEsOHb....',
-  '.OHHHHHO......',
-  '..LLLLLLL.....',
-  '.LLWWWWLL.gGgg',
-  '.LWWRRWWL..gGg',
-  '.LWWRRWWL...g.',
-  '.LLWWWWLL.....',
-  '.LLLWWLLL.....',
-  '..LjJJjL......',
-  '..JJJJJJ......',
-  '..JJJJJJ......',
-  '..JJjjJJ......',
-  '..jj..j.......',
-  '..j....Jj.....',
-  '.Zz...zZz.....',
-  '.OZ....OZ.....',
-  '.O.....O......',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-];
-
-// run right frame 1
-const gregRun1 = [
-  '...BBBBBBB....',
-  '..BBBccBBB....',
-  '.BcBBBBBBb....',
-  '.BBBBBBBbB....',
-  '.OsSSSsOH.....',
-  '.OEssEsOHb....',
-  '.OHHHHHO......',
-  '..LLLLLLL.....',
-  '.LLWWWWLL.gGgg',
-  '.LWWRRWWL..gGg',
-  '.LWWRRWWL...g.',
-  '.LLWWWWLL.....',
-  '.LLLWWLLL.....',
-  '..LjJJjL......',
-  '..JJJJJJ......',
-  '..JJJJJJ......',
-  '..jJJJj.......',
-  '..Jj..Jj......',
-  '..j....j......',
-  '.Zz....zZ.....',
-  '.O......Oz....',
-  '.........O....',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-];
-
-// jump right
-const gregJump = [
-  '...BBBBBBB....',
-  '..BBBccBBB....',
-  '.BcBBBBBBb....',
-  '.BBBBBBBbB....',
-  '.OsSSSsOH.....',
-  '.OEssEsOHb....',
-  '.OHHHHHO......',
-  '..LLLLLLL.....',
-  '.LLWWWWLL.gGgg',
-  '.LWWRRWWL..gGg',
-  '.LWWRRWWL...g.',
-  '.LLWWWWLL.....',
-  '.LLLWWLLL.....',
-  '..JJJJJJ......',
-  '..JJJJJJ......',
-  '..JJJJJJ......',
-  '.jjJJJJjj.....',
-  'jJ......Jj....',
-  'j........j....',
-  'Zz........Z...',
-  'OZ........O...',
-  '.O............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-];
-
-// crouch right
-const gregCrouch = [
-  '..............',
-  '..............',
-  '..............',
-  '...BBBBBBB....',
-  '..BBBccBBB....',
-  '.BcBBBBBBb....',
-  '.BBBBBBBbB....',
-  '.OsSSSsOH.....',
-  '.OEssEsOHb....',
-  '.OHHHHHO......',
-  '.LLLLLLLL.gGgg',
-  'LLWWRRWWLL.gGg',
-  'LLWWRRWWLL..g.',
-  '.LLLWWLLL.....',
-  '..JJJJJJJ.....',
-  '.JJJjjJJJ.....',
-  'ZZZJ..JZZZ....',
-  'OOO....OOO....',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-];
-
-// aim up right (shooting upward)
-const gregAimUp = [
-  '........g.....',
-  '........Gg....',
-  '........g.....',
-  '...BBBBBBB....',
-  '..BBBccBBB....',
-  '.BcBBBBBBb....',
-  '.BBBBBBBbB....',
-  '.OsSSSsOH.....',
-  '.OEssEsOHb....',
-  '.OHHHHHO......',
-  '..LLLLLLL.....',
-  '.LLWWWWLL.....',
-  '.LWWRRWWL.....',
-  '.LWWRRWWL.....',
-  '.LLWWWWLL.....',
-  '.LLLWWLLL.....',
-  '..LjJJjL......',
-  '..JJJJJJ......',
-  '..JJJJJJ......',
-  '..JJjjJJ......',
-  '..Jj..jJ......',
-  '..j....j......',
-  '..Zz..zZ......',
-  '.ZZZ..ZZZ.....',
-  '.OO....OO.....',
-  '..............',
-];
-
-// dead / hit
-const gregHit = [
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '.OOOOOOOOOO...',  // fallen on ground
-  'OcBBBBBBBBBO..',
-  'OsSsSHHHHBBO..',
-  'OEEHHWWWRRlO..',
-  'OLLWWWRWWRjO..',
-  'OLWWRWRWWLjO..',
-  'OLLWWWWLLJjO..',
-  '.OLJJJJJLJJO..',
-  '..OJJjjJJjJO..',
-  '..OZZ..ZZZZO..',
-  '..OO....OOO...',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-];
-
-// =========================================================
-// ENEMIES
-// =========================================================
-
-// Grunt: congresista with suit + gun
-const grunt0 = [
-  '....OOOO....',
-  '...OFFFFO...', // greenish face
-  '...OFlFFO...',
-  '...OEMMEO...',
-  '...OFfFFO...',
-  '....OTTO....', // white collar
-  '..OCCCCCO...',
-  '.OCCtRtCCO..',
-  'OCCCCCCCCCO.',
-  'OCcCCCCCcCO.',
-  '.OCCCCCCCO..',
-  '..OCCCCCO...',
-  '..OJJJJJO...',
-  '..OJJJJJO...',
-  '..OJJjJJO...',
-  '..OJj.jJO...',
-  '..OZz.zZO...',
-  '.OZZ..ZZO...',
-  '.OO...OO....',
-  '............',
-  '............',
-  '............',
-  '............',
-  '............',
-];
-const gruntPal = {
-  O: '#080402', F: '#3a6030', f: '#1a3010', l: '#5a8040',
-  E: '#e8d040', M: '#4a0a0a', T: '#e0dcd0',
-  C: '#1a1a28', c: '#3a3a4a', R: '#c01a1a', t: '#ffffff',
-  J: '#0a0a0a', j: '#1a1a1a', Z: '#080808', z: '#1a1a1a',
-};
-
-// Jumper: ciudadano with orange vincha + pistol
-const jumper = [
-  '....OOOO....',
-  '...OVVVVO...',  // vincha
-  '...OFlFFO...',
-  '...OEMMEO...',
-  '...OFfFFO...',
-  '....OFFO....',
-  '..OSSSSSO...',  // polo
-  '.OSSsSSsSO..',
-  'OSSSSRSSSO..',
-  'OSSSSRSSSO..',
-  '.OSSSSSSSO..',
-  '..OSSSSSO...',
-  '..OJJJJJO...',
-  '..OJJJJJO...',
-  '..OJJjJJO...',
-  '..OJ...JO...',
-  '..OZ...ZO...',
-  '.OZZ...ZZO..',
-  '.OO.....OO..',
-  '............',
-  '............',
-  '............',
-  '............',
-  '............',
-];
-const jumperPal = {
-  O: '#080402', V: '#ff7a1f', F: '#3a6030', f: '#1a3010', l: '#5a8040',
-  E: '#e8d040', M: '#4a0a0a',
-  S: '#e0dcd0', s: '#a89888', R: '#c01a1a',
-  J: '#1a2a48', j: '#0a152a', Z: '#1a1a1a',
-};
-
-// Turret: stationary with big gun
-const turret = [
-  '................',
-  '................',
-  '.....gGGGGGG....',
-  '....gGGGgggggG..',
-  '.....gGGGGGG....',
-  '......OO........',
-  '.OOOOOOOOOOOO...',
-  'OCCCCCCCCCCCCO..',
-  'OCtCCCCCCCCtCO..',
-  'OCCCCCCCCCCCCO..',
-  'OCCCtCtCtCtCCO..',
-  'OCCCCCCCCCCCCO..',
-  'OCCCCCCCCCCCCO..',
-  '.OOOOOOOOOOOO...',
-  '................',
-  '................',
-];
-const turretPal = { O: '#080402', C: '#4a4a5a', c: '#6a6a7a', t: '#8a8a9a', g: '#2a2a2a', G: '#6a6a6a' };
-
-// Roller: spherical enemy rolling toward player
-const roller = [
-  '...OOOO....',
-  '..OVVVVVO..',
-  '.OVcVVVcVO.',
-  'OVVVVVVVVVO',
-  'OVcVVVVVcVO',
-  'OVVVVVVVVVO',
-  'OVcVVVVVcVO',
-  'OVVVVVVVVVO',
-  '.OVcVVVcVO.',
-  '..OVVVVVO..',
-  '...OOOO....',
-];
-const rollerPal = { O: '#080402', V: '#ff7a1f', c: '#ffd040' };
-
-// Flyer: small drone
-const flyer = [
-  '....OOOO....',
-  '.OOgGGGGgOO.',
-  'OGGGggggGGGO',
-  'OGgG.gg.GgGO',
-  '.OOgGGGGgOO.',
-  '....OOOO....',
-];
-const flyerPal = { O: '#080402', g: '#3a3a4a', G: '#6a6a7a' };
-
-// Powerup letters
-function makeLetterBox(letter, col) {
-  const box = [
-    '.OOOOOO.',
-    'ORRRRRRO',
-    'ORLLLLRO',
-    'ORLcccRO',
-    'ORLcccRO',
-    'ORLLLLRO',
-    'ORRRRRRO',
-    '.OOOOOO.',
-  ];
-  return { rows: box, pal: { O: '#080402', R: col, L: '#fff4d0', c: col } };
 }
 
-// =========================================================
-// PROJECTILES & EFFECTS
-// =========================================================
-const bullet_basic = ['yYy', 'YYY', 'yYy'];
-const bulletPal = { y: '#ffb347', Y: '#fff4d0' };
-const bullet_spread = ['.Y.','YYY','.Y.'];
-const bullet_fire = ['.RR.','RffR','RfFR','RRR.'];
-const firePal = { R: '#ff3a14', f: '#ffd040', F: '#ffffff' };
-const bullet_laser = ['LLLLLLLL'];
-const laserPal = { L: '#ff3aff' };
-const bullet_homing = ['.gG.','ggGg','Rggg','.RR.'];
-const homingPal = { g: '#3a3a4a', G: '#8a8a9a', R: '#ff3a14' };
-
-// Muzzle flash
-const flash = [
-  '.YY.',
-  'YRRY',
-  'YRRRY',
-  'YRRY',
-  '.YY.',
-];
-const flashPal = { Y: '#fff4d0', R: '#ff7a1f' };
-
-export function initSprites() {
-  // Gregorio variants
-  bake('greg_idle', gregIdle.map(r), GP);
-  bake('greg_run0', gregRun0.map(r), GP);
-  bake('greg_run1', gregRun1.map(r), GP);
-  bake('greg_jump', gregJump.map(r), GP);
-  bake('greg_crouch', gregCrouch.map(r), GP);
-  bake('greg_aimup', gregAimUp.map(r), GP);
-  bake('greg_hit', gregHit.map(r), GP);
-
-  bake('enemy_grunt', grunt0.map(r), gruntPal);
-  bake('enemy_jumper', jumper.map(r), jumperPal);
-  bake('enemy_turret', turret.map(r), turretPal);
-  bake('enemy_roller', roller.map(r), rollerPal);
-  bake('enemy_flyer', flyer.map(r), flyerPal);
-
-  bake('bullet_basic', bullet_basic.map(r), bulletPal);
-  bake('bullet_spread', bullet_spread.map(r), bulletPal);
-  bake('bullet_fire', bullet_fire.map(r), firePal);
-  bake('bullet_laser', bullet_laser.map(r), laserPal);
-  bake('bullet_homing', bullet_homing.map(r), homingPal);
-  bake('flash', flash.map(r), flashPal);
-
-  // Powerup boxes
-  const weaponColors = { M: '#3a3a4a', S: '#ff7a1f', F: '#ff3a14', H: '#7a3aff', L: '#ff3aff', B: '#ffd040' };
-  for (const k in weaponColors) {
-    const lb = makeLetterBox(k, weaponColors[k]);
-    bake('powerup_' + k, lb.rows.map(r), lb.pal);
+function buildFxSprites() {
+  // muzzle flash
+  {
+    const c = makeCanvas(12, 12);
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#ffd040'; ctx.fillRect(4, 2, 4, 8); ctx.fillRect(2, 4, 8, 4);
+    ctx.fillStyle = '#fff4d0'; ctx.fillRect(5, 4, 2, 4); ctx.fillRect(4, 5, 4, 2);
+    CACHE.set('flash', { img: c, w: 12, h: 12 });
+  }
+  // bullets
+  for (const [key, color, w, h] of [
+    ['bullet-basic', '#ffd040', 6, 3],
+    ['bullet-spread', '#ff7a1f', 4, 4],
+    ['bullet-fire', '#ff3a14', 8, 5],
+    ['bullet-laser', '#ff3aff', 14, 2],
+    ['bullet-homing', '#8a8a9a', 6, 4],
+  ]) {
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#080402'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = color; ctx.fillRect(1, 1, w - 2, h - 2);
+    if (h > 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(1, 1, w - 2, 1); }
+    CACHE.set(key, { img: c, w, h });
   }
 }
 
 export function getSprite(key) { return CACHE.get(key); }
-export function drawSprite(ctx, key, x, y, { flip = false, alpha = 1 } = {}) {
-  const s = CACHE.get(key); if (!s) return;
+
+export function drawSprite(ctx, key, x, y, opts = {}) {
+  const s = CACHE.get(key);
+  if (!s) return;
+  const flip = !!opts.flip;
+  const alpha = opts.alpha ?? 1;
+  const anchor = opts.anchor || 'topleft'; // 'topleft' or 'center' or 'bottom-center'
+  let drawX = x, drawY = y;
+  if (anchor === 'center') { drawX = x - s.w/2; drawY = y - s.h/2; }
+  else if (anchor === 'bottom-center') { drawX = x - s.w/2; drawY = y - s.h; }
+
   ctx.save();
   if (alpha !== 1) ctx.globalAlpha = alpha;
-  ctx.translate(Math.floor(x), Math.floor(y));
-  if (flip) { ctx.scale(-1, 1); ctx.translate(-s.w, 0); }
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(s.canvas, 0, 0);
+  if (flip) {
+    ctx.translate(Math.floor(drawX + s.w), Math.floor(drawY));
+    ctx.scale(-1, 1);
+    ctx.drawImage(s.img, 0, 0);
+  } else {
+    ctx.drawImage(s.img, Math.floor(drawX), Math.floor(drawY));
+  }
   ctx.restore();
 }

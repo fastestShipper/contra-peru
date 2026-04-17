@@ -2,7 +2,7 @@
 import { VIEW_W, VIEW_H, STAGES, FIXED_DT } from './config.js';
 import { input, endFrameInput } from './engine/input.js';
 import { camera, followPlayer, updateCamera, setBounds, addShake, resetCamera } from './engine/camera.js';
-import { initSprites } from './engine/sprites.js';
+import { getSprite } from './engine/sprites.js';
 import { sfx, unlockAudio, setMuted, isMuted } from './engine/audio.js';
 import { updateParticles, renderParticles, clearParticles } from './engine/particles.js';
 import { loadMap, map, renderMap, renderParallax } from './engine/tilemap.js';

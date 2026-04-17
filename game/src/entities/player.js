@@ -1,4 +1,4 @@
-// Gregorio — Contra III mechanics
+// Gregorio — Contra III mechanics, now with AI-generated sprites
 import {
   GRAVITY, JUMP_VEL, JUMP_SHORT_VEL, MOVE_SPEED, MAX_FALL,
   PLAYER_W, PLAYER_H, CROUCH_H, VIEW_W, VIEW_H
@@ -15,27 +15,20 @@ import { clamp, normalize } from '../engine/math.js';
 export const player = {
   x: 50, y: 100, w: PLAYER_W, h: PLAYER_H,
   vx: 0, vy: 0,
-  facing: 1,       // 1 right, -1 left
+  facing: 1,
   onGround: false,
-  wasGround: false,
   crouching: false,
   aiming: { dx: 1, dy: 0 },
-  hp: 3,
-  maxHp: 3,
-  invuln: 0,
-  hitFlash: 0,
+  hp: 3, maxHp: 3,
+  invuln: 0, hitFlash: 0,
   alive: true,
-  weaponIdx: 0,    // index into WEAPON_ORDER
-  altIdx: -1,
-  weaponSlots: ['M', null],  // 2 slots (Contra III style)
+  weaponSlots: ['M', null], weaponIdx: 0,
   fireTimer: 0,
   bombs: 3,
   walkTime: 0,
   muzzleTime: 0,
   muzzlePos: { x: 0, y: 0, angle: 0 },
-  jumpHeld: 0,
-  coyote: 0,
-  jumpBuffer: 0,
+  jumpHeld: 0, coyote: 0, jumpBuffer: 0,
   score: 0,
   lives: 3,
   respawnTimer: 0,
@@ -48,10 +41,8 @@ export function resetPlayer(x = 30, y = 100) {
   player.onGround = false;
   player.crouching = false;
   player.aiming = { dx: 1, dy: 0 };
-  player.hp = 3;
-  player.maxHp = 3;
-  player.invuln = 1.2;
-  player.hitFlash = 0;
+  player.hp = 3; player.maxHp = 3;
+  player.invuln = 1.2; player.hitFlash = 0;
   player.alive = true;
   player.weaponSlots = ['M', null];
   player.weaponIdx = 0;
@@ -60,6 +51,7 @@ export function resetPlayer(x = 30, y = 100) {
   player.lives = 3;
   player.score = 0;
   player.respawnTimer = 0;
+  player.w = PLAYER_W; player.h = PLAYER_H;
 }
 
 export function respawn() {
@@ -72,6 +64,7 @@ export function respawn() {
   player.crouching = false;
   player.weaponSlots = ['M', null];
   player.weaponIdx = 0;
+  player.w = PLAYER_W; player.h = PLAYER_H;
   player.respawnTimer = 0;
 }
 
@@ -80,20 +73,13 @@ function computeAim() {
   const dy = input.dy();
   let ax = player.facing, ay = 0;
   if (dx !== 0 || dy !== 0) {
-    ax = dx;
-    ay = dy;
-    // can't aim down while standing — only down while airborne or crouching
+    ax = dx; ay = dy;
     if (ay > 0 && player.onGround && !player.crouching) ay = 0;
     if (ax === 0 && ay === 0) ax = player.facing;
   }
-  if (player.crouching && ax !== 0) {
-    // can only aim horizontally while crouched
-    ay = 0;
-  }
+  if (player.crouching && ax !== 0) ay = 0;
   const [nx, ny] = normalize(ax, ay);
-  player.aiming.dx = nx;
-  player.aiming.dy = ny;
-  // update facing based on x aim
+  player.aiming.dx = nx; player.aiming.dy = ny;
   if (dx !== 0) player.facing = dx > 0 ? 1 : -1;
 }
 
@@ -105,13 +91,13 @@ function tryFire(dt) {
   const w = WEAPONS[wId];
   if (player.fireTimer > 0) return;
   player.fireTimer = w.fireRate;
-  // muzzle position based on body + aim
-  const ox = player.x + player.w/2 + player.aiming.dx * 10;
-  const oy = player.y + (player.crouching ? 12 : 10) + player.aiming.dy * 8;
+  // muzzle from gun tip
+  const ox = player.x + player.w/2 + player.aiming.dx * 14;
+  const oy = player.y + (player.crouching ? 10 : 16) + player.aiming.dy * 8;
   w.shoot(ox, oy, player.aiming.dx, player.aiming.dy);
   player.muzzleTime = 0.06;
   player.muzzlePos = { x: ox, y: oy, angle: Math.atan2(player.aiming.dy, player.aiming.dx) };
-  spawnCasing(player.x + player.w/2 + player.facing * 3, player.y + (player.crouching ? 12 : 12), player.facing);
+  spawnCasing(player.x + player.w/2 + player.facing * 3, player.y + 14, player.facing);
 }
 
 function tryBomb() {
@@ -121,7 +107,6 @@ function tryBomb() {
   spawnExplosion(player.x + player.w/2, player.y + player.h/2, 3, '#ffd040');
   addShake(12, 0.55);
   sfx.bomb();
-  // the game loop will handle killing all on-screen enemies in game.js
   player._bombTrigger = true;
 }
 
@@ -133,7 +118,6 @@ function trySwap() {
 }
 
 export function pickupWeapon(id) {
-  // Contra III: pick up replaces current weapon (simplified to 2 slots)
   if (!player.weaponSlots[1]) {
     player.weaponSlots[1] = id;
     player.weaponIdx = 1;
@@ -159,7 +143,6 @@ export function damagePlayer() {
     sfx.die();
     player.respawnTimer = 1.5;
   } else {
-    // in Contra III, the player drops their weapon on hit, revert to basic
     player.weaponSlots = ['M', null];
     player.weaponIdx = 0;
   }
@@ -170,18 +153,14 @@ export function updatePlayer(dt) {
     player.respawnTimer = Math.max(0, player.respawnTimer - dt);
     return;
   }
-
-  // timers
   player.invuln = Math.max(0, player.invuln - dt);
   player.hitFlash = Math.max(0, player.hitFlash - dt);
   player.muzzleTime = Math.max(0, player.muzzleTime - dt);
   player.coyote = Math.max(0, player.coyote - dt);
   player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
 
-  // jump input buffer
   if (input.justPressed('jump')) player.jumpBuffer = 0.12;
 
-  // crouch
   const wantCrouch = input.pressed('down') && player.onGround;
   if (wantCrouch && !player.crouching) {
     player.crouching = true;
@@ -193,98 +172,95 @@ export function updatePlayer(dt) {
     player.h = PLAYER_H;
   }
 
-  // horizontal movement
   const dx = input.dx();
   const canMove = !player.crouching;
   if (canMove && dx !== 0) {
     player.vx = dx * MOVE_SPEED;
     player.walkTime += dt;
   } else {
-    player.vx = 0;
-    player.walkTime = 0;
+    player.vx = 0; player.walkTime = 0;
   }
 
-  // jump
   if (player.jumpBuffer > 0 && (player.onGround || player.coyote > 0)) {
     player.vy = JUMP_VEL;
     player.onGround = false;
-    player.coyote = 0;
-    player.jumpBuffer = 0;
-    player.jumpHeld = 1;
+    player.coyote = 0; player.jumpBuffer = 0;
     sfx.jump();
   }
-  // jump release for variable height
   if (input.justReleased && input.justReleased('jump') && player.vy < JUMP_SHORT_VEL) {
     player.vy = JUMP_SHORT_VEL;
   }
 
-  // gravity
   player.vy += GRAVITY * dt;
   if (player.vy > MAX_FALL) player.vy = MAX_FALL;
 
-  // move & collide
   moveX(player, player.vx * dt);
   const dropThrough = input.pressed('down') && input.justPressed('jump');
   const vRes = moveY(player, player.vy * dt, dropThrough);
-  player.wasGround = player.onGround;
   if (vRes.onGround) {
     if (!player.onGround && player.vy > 250) sfx.land();
-    player.onGround = true;
-    player.vy = 0;
-    player.coyote = 0.08;
-  } else {
-    player.onGround = false;
-  }
+    player.onGround = true; player.vy = 0; player.coyote = 0.08;
+  } else { player.onGround = false; }
   if (vRes.hitCeiling && player.vy < 0) player.vy = 0;
 
-  // Camera push: if camera locks left and player is behind, push forward or kill
   const minX = camera.x - 4;
   if (player.x < minX) player.x = minX;
-  // clamp to world
   player.x = clamp(player.x, 2, map.widthPx - player.w - 2);
   if (player.y > map.heightPx + 60) damagePlayer();
+  if (isHazardAt(player.x + player.w/2, player.y + player.h - 2)) damagePlayer();
 
-  // hazards
-  if (isHazardAt(player.x + player.w/2, player.y + player.h - 2)) {
-    damagePlayer();
-  }
-
-  // aim + fire
   computeAim();
   tryFire(dt);
   tryBomb();
   trySwap();
 }
 
-function currentSprite() {
+function currentSpriteKey() {
   const airborne = !player.onGround;
-  const aimUp = player.aiming.dy < -0.5 && Math.abs(player.aiming.dx) < 0.5;
-  if (player.crouching) return 'greg_crouch';
-  if (airborne) return 'greg_jump';
-  if (aimUp) return 'greg_aimup';
-  if (Math.abs(player.vx) > 4) {
+  if (player.crouching) return 'greg-crouch';
+  if (airborne) return 'greg-jump';
+  if (input.pressed('shoot') || Math.abs(player.vx) > 4) {
     const frame = Math.floor(player.walkTime * 10) % 2;
-    return frame ? 'greg_run1' : 'greg_run0';
+    return frame ? 'greg-run-1' : 'greg-run-0';
   }
-  return 'greg_idle';
+  return 'greg-idle';
 }
 
 export function renderPlayer(ctx) {
   if (!player.alive) return;
-  const key = currentSprite();
-  const s = getSprite(key); if (!s) return;
-  // flicker during invuln
-  if (player.invuln > 0 && Math.floor(player.invuln * 20) % 2 === 0) return;
+  const key = currentSpriteKey();
+  const s = getSprite(key);
+  if (!s) return;
+  // invuln flicker
+  if (player.invuln > 0 && Math.floor(player.invuln * 22) % 2 === 0) return;
   const flip = player.facing === -1;
-  // position: sprite is 14 wide, 26 tall; align center
-  const sx = Math.floor(player.x + player.w/2 - 7 - camera.x + camera.shakeX);
-  const sy = Math.floor(player.y - (player.crouching ? 0 : 0) - camera.y + camera.shakeY);
-  drawSprite(ctx, key, sx, sy, { flip });
+  // draw anchor: bottom-center of sprite aligned to player bottom
+  const baseX = Math.floor(player.x + player.w/2 - camera.x + camera.shakeX);
+  const baseY = Math.floor(player.y + player.h - camera.y + camera.shakeY);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (flip) {
+    ctx.translate(baseX + s.w/2, baseY - s.h);
+    ctx.scale(-1, 1);
+    ctx.drawImage(s.img, 0, 0);
+  } else {
+    ctx.drawImage(s.img, baseX - s.w/2, baseY - s.h);
+  }
+  // hit flash: red tint overlay
+  if (player.hitFlash > 0) {
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = 'rgba(255,50,30,0.5)';
+    const fx = flip ? 0 : baseX - s.w/2;
+    const fy = flip ? -s.h : baseY - s.h;
+    if (flip) ctx.fillRect(0, 0, s.w, s.h);
+    else ctx.fillRect(fx, fy, s.w, s.h);
+  }
+  ctx.restore();
 
   // muzzle flash
   if (player.muzzleTime > 0) {
-    const mx = Math.floor(player.muzzlePos.x - camera.x + camera.shakeX - 3);
-    const my = Math.floor(player.muzzlePos.y - camera.y + camera.shakeY - 3);
+    const mx = Math.floor(player.muzzlePos.x - camera.x + camera.shakeX - 6);
+    const my = Math.floor(player.muzzlePos.y - camera.y + camera.shakeY - 6);
     drawSprite(ctx, 'flash', mx, my);
   }
 }

@@ -1,53 +1,44 @@
-# CONTRA PERÚ
+# CONTRA PERÚ 🎮
 
-> Shooter run'n'gun estilo **Contra III: The Alien Wars** ambientado en Lima, Perú · abril 2026.
+> Shooter run'n'gun estilo *Contra III: The Alien Wars* ambientado en Lima, Perú · abril 2026.
 
-Gregorio Quispe Vargas con gorra de Alianza Lima y un USB con la evidencia del fraude tiene que cruzar **5 distritos de Lima** hasta llegar a la ONPE en Jesús María.
+**Gregorio Quispe Vargas** — con su gorra de Alianza Lima y un USB con la
+evidencia del fraude — tiene que cruzar **5 distritos de Lima** hasta llegar a
+la ONPE en Jesús María. La ciudad no se lo va a poner fácil.
 
 **Jugar:** https://n3ws.tech/contra-peru/
 
+## Concepto
+
+Un POC de juego de acción con estética retro (sprites procesados con tooling
+propio) y narrativa de sátira política peruana: el recorrido del ciudadano
+común cargando la prueba hasta la autoridad electoral, distrito por distrito.
+
+## Estructura
+
+```
+contra-peru/
+├── game/     El juego (escenas, entidades, engine de sprites/tilemap)
+├── tools/    Pipeline de sprites y ROMs (paletas, headers, tilemaps)
+└── docs/     Documentación del proyecto
+```
+
+## Correr localmente
+
+Abrir `game/index.html` en un navegador (sin build, sin dependencias).
+
 ## Stack
 
-- HTML5 Canvas + Vanilla JS ES Modules
-- Física side-scroll con AABB tiles
-- Sprites pixel procedurales
-- Audio procedural Web Audio
-- Cero dependencias, cero build step
+- JavaScript vanilla (canvas), engine propio de sprites + tilemap
+- Pipeline de assets en Python (`tools/`) para procesar sprites y paletas
+- Sin dependencias externas
 
-## Mecánicas estilo Contra III
+## Créditos
 
-- Run'n'gun side-scrolling con cámara que no retrocede
-- Jump con arco alto + variable height
-- Crouch
-- 8-direction aiming (WASD determina dirección de tiro)
-- 5 armas: Metralleta, Confeti, Molotov, Bombarda, Vizcacha
-- Bomba que limpia pantalla
-- Hit = pierde arma y vuelve a pistola base
-- Vidas + game over
-- Boss de stage
+POC desarrollado en abril 2026. Inspirado en el clásico *Contra III: The Alien
+Wars* (Konami). Proyecto de demostración — no afiliado a ninguna entidad
+electoral ni partido político.
 
-## Stages
+## License
 
-1. **Lima Centro · Jirón de la Unión** — side-scroll, boss Combi Blindada ✅
-2. **Congreso · Plaza Bolívar** — top-down overhead (mode 7 style) — pending
-3. **Vía Expresa** — techo de la combi, side-scroll vehicular — pending
-4. **Callao Puerto · Muelle 5** — top-down overhead — pending
-5. **ONPE Jesús María** — side-scroll final, boss El Acta Falsa — pending
-
-## Controles
-
-| Tecla | Acción |
-|---|---|
-| A D | Moverse |
-| W | Apuntar arriba |
-| S | Agacharse |
-| SPACE / Z | Saltar |
-| X / J | Disparar |
-| C / K / B | Bomba |
-| V / Q | Cambiar arma |
-| ESC | Pausar |
-| M | Mute |
-
-## Licencia
-
-MIT.
+MIT (ver `LICENSE`).
